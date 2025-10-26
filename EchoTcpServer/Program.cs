@@ -56,12 +56,18 @@ namespace EchoServer
 
                     while (!token.IsCancellationRequested)
                     {
+<<<<<<< HEAD
                         // ✅ Use the new Memory<byte> overload
+=======
+>>>>>>> acdd0cf02a903254c894ee25bb3c78d00d09f233
                         int bytesRead = await stream.ReadAsync(buffer.AsMemory(), token);
                         if (bytesRead == 0)
                             break;
 
+<<<<<<< HEAD
                         // ✅ Also updated WriteAsync to Memory<byte>
+=======
+>>>>>>> acdd0cf02a903254c894ee25bb3c78d00d09f233
                         await stream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
 
                         Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
@@ -125,6 +131,8 @@ namespace EchoServer
         private readonly UdpClient _udpClient;
         private Timer _timer;
 
+        private readonly bool _disposed = false;
+
         public UdpTimedSender(string host, int port)
         {
             _host = host;
@@ -144,6 +152,8 @@ namespace EchoServer
 
         private void SendMessageCallback(object state)
         {
+            if (_disposed) return;
+
             try
             {
                 //dummy data
