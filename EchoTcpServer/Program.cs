@@ -122,6 +122,8 @@ namespace EchoServer
         private readonly UdpClient _udpClient;
         private Timer _timer;
 
+        private bool _disposed = false;
+
         public UdpTimedSender(string host, int port)
         {
             _host = host;
@@ -141,6 +143,8 @@ namespace EchoServer
 
         private void SendMessageCallback(object state)
         {
+            if (_disposed) return;
+
             try
             {
                 //dummy data
