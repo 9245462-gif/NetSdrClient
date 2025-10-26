@@ -122,7 +122,7 @@ namespace EchoServer
         private readonly UdpClient _udpClient;
         private Timer _timer;
 
-        private bool _disposed = false;
+        private readonly bool _disposed = false;
 
         public UdpTimedSender(string host, int port)
         {
