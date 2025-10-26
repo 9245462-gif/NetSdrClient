@@ -11,7 +11,7 @@ namespace EchoServer
     {
         private readonly int _port;
         private TcpListener _listener;
-        private CancellationTokenSource _cancellationTokenSource;
+        private readonly CancellationTokenSource _cancellationTokenSource;
 
         //constuctor
         public EchoServer(int port)
@@ -45,19 +45,22 @@ namespace EchoServer
             Console.WriteLine("Server shutdown.");
         }
 
-        private async Task HandleClientAsync(TcpClient client, CancellationToken token)
+        private static async Task HandleClientAsync(TcpClient client, CancellationToken token)
         {
             using (NetworkStream stream = client.GetStream())
             {
                 try
                 {
                     byte[] buffer = new byte[8192];
-                    int bytesRead;
 
-                    while (!token.IsCancellationRequested && (bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
+                    while (!token.IsCancellationRequested)
                     {
-                        // Echo back the received message
-                        await stream.WriteAsync(buffer, 0, bytesRead, token);
+                        int bytesRead = await stream.ReadAsync(buffer.AsMemory(), token);
+                        if (bytesRead == 0)
+                            break;
+
+                        await stream.WriteAsync(buffer.AsMemory(0, bytesRead), token);
+
                         Console.WriteLine($"Echoed {bytesRead} bytes to the client.");
                     }
                 }
@@ -72,6 +75,7 @@ namespace EchoServer
                 }
             }
         }
+
 
         public void Stop()
         {
@@ -118,6 +122,8 @@ namespace EchoServer
         private readonly UdpClient _udpClient;
         private Timer _timer;
 
+        private readonly bool _disposed = false;
+
         public UdpTimedSender(string host, int port)
         {
             _host = host;
@@ -137,6 +143,8 @@ namespace EchoServer
 
         private void SendMessageCallback(object state)
         {
+            if (_disposed) return;
+
             try
             {
                 //dummy data
