@@ -18,6 +18,7 @@ namespace EchoServer
         {
             _port = port;
             _cancellationTokenSource = new CancellationTokenSource();
+            _listener = new TcpListener(IPAddress.Any, port);
         }
 
         public async Task StartAsync()
