@@ -1,6 +1,7 @@
 ﻿using Moq;
 using NetSdrClientApp;
 using NetSdrClientApp.Networking;
+using System.Reflection;
 
 namespace NetSdrClientAppTests;
 
@@ -115,5 +116,74 @@ public class NetSdrClientTests
         Assert.That(_client.IQStarted, Is.False);
     }
 
-    //TODO: cover the rest of the NetSdrClient code here
+    [Test]
+    public async Task SendTcpRequest_ShouldReturnResponseFromEvent()
+    {
+        // Arrange
+        _tcpMock.Setup(tcp => tcp.Connected).Returns(true);
+        
+        byte[] expectedResponse = { 0x10, 0x20, 0x30 };
+        var tcs = new TaskCompletionSource<byte[]>();
+
+        _tcpMock.Setup(t => t.SendMessageAsync(It.IsAny<byte[]>()))
+            .Callback<byte[]>(data =>
+            {
+                // Симулюємо відповідь з невеликою затримкою
+                Task.Run(async () =>
+                {
+                    await Task.Delay(100);
+                    _tcpMock.Raise(t => t.MessageReceived += null, _tcpMock.Object, expectedResponse);
+                });
+            })
+            .Returns(Task.CompletedTask);
+
+        // Act
+        var response = await CallSendTcpRequest(_client, new byte[] { 1, 2, 3 });
+
+        // Assert
+        Assert.NotNull(response);
+        Assert.That(response, Is.EqualTo(expectedResponse));
+    }
+
+    private Task<byte[]> CallSendTcpRequest(NetSdrClient client, byte[] data)
+    {
+        var method = typeof(NetSdrClient)
+            .GetMethod("SendTcpRequest", BindingFlags.NonPublic | BindingFlags.Instance);
+        return (Task<byte[]>)method.Invoke(client, new object[] { data });
+    }
+
+    [Test]
+    public void TcpMessageReceived_WithoutPendingRequest_DoesNotThrow()
+    {
+        // Arrange
+        byte[] raw = { 1, 2, 3 };
+
+        // Act & Assert
+        Assert.DoesNotThrow(() =>
+            _tcpMock.Raise(t => t.MessageReceived += null, _tcpMock.Object, raw)
+        );
+    }
+
+    [Test]
+    public void Disconnect_ShouldAlwaysCallUnderlyingTcp()
+    {
+        // Act
+        _client.Disconect();
+
+        // Assert
+        _tcpMock.Verify(t => t.Disconnect(), Times.Once);
+    }
+
+    [Test]
+    public async Task StartIQAsync_NoConnection_DoesNothing()
+    {
+        // Arrange — tcp.Connected = false (за замовчуванням)
+
+        // Act
+        await _client.StartIQAsync();
+
+        // Assert
+        _updMock.Verify(u => u.StartListeningAsync(), Times.Never);
+        Assert.False(_client.IQStarted);
+    }
 }
