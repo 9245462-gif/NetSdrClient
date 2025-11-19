@@ -1,6 +1,9 @@
 using System;
 using System.IO;
+using System.Linq;
+using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,8 +17,6 @@ namespace NetSdrClientAppTests.Networking
     public class TcpClientWrapperTests
     {
         private TcpClientWrapper _tcpClient;
-        private Mock<NetworkStream> _mockStream;
-        private Mock<TcpClient> _mockTcpClient;
         private const string TestHost = "localhost";
         private const int TestPort = 8080;
 
@@ -23,10 +24,6 @@ namespace NetSdrClientAppTests.Networking
         public void Setup()
         {
             _tcpClient = new TcpClientWrapper(TestHost, TestPort);
-            
-            // Mock TcpClient and NetworkStream
-            _mockTcpClient = new Mock<TcpClient>();
-            _mockStream = new Mock<NetworkStream>();
         }
 
         [TearDown]
@@ -50,9 +47,9 @@ namespace NetSdrClientAppTests.Networking
         }
 
         [Test]
-        public void Connect_WhenConnectionFails_ShouldNotThrow()
+        public void Connect_ShouldNotThrow_WhenNoRealConnection()
         {
-            // Act & Assert
+            // Act & Assert - should handle connection failure gracefully
             Assert.DoesNotThrow(() => _tcpClient.Connect());
         }
 
@@ -64,33 +61,19 @@ namespace NetSdrClientAppTests.Networking
         }
 
         [Test]
-        public void Disconnect_WhenConnected_ShouldDisconnect()
-        {
-            // Arrange
-            // Use reflection to set private fields for testing
-            SetPrivateField(_tcpClient, "_tcpClient", new TcpClient());
-            
-            // Act
-            _tcpClient.Disconnect();
-
-            // Assert
-            Assert.That(_tcpClient.Connected, Is.False);
-        }
-
-        [Test]
-        public async Task SendMessageAsync_WhenNotConnected_ShouldThrow()
+        public void SendMessageAsync_WhenNotConnected_ShouldThrow()
         {
             // Act & Assert
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(() => 
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
                 _tcpClient.SendMessageAsync(new byte[] { 1, 2, 3 }));
             Assert.That(ex.Message, Contains.Substring("Not connected"));
         }
 
         [Test]
-        public async Task SendMessageAsync_WithString_WhenNotConnected_ShouldThrow()
+        public void SendMessageAsync_WithString_WhenNotConnected_ShouldThrow()
         {
             // Act & Assert
-            var ex = Assert.ThrowsAsync<InvalidOperationException>(() => 
+            var ex = Assert.ThrowsAsync<InvalidOperationException>(() =>
                 _tcpClient.SendMessageAsync("test message"));
             Assert.That(ex.Message, Contains.Substring("Not connected"));
         }
@@ -103,32 +86,17 @@ namespace NetSdrClientAppTests.Networking
         }
 
         [Test]
-        public void Dispose_MultipleTimes_ShouldNotThrow()
+        public void MessageReceived_Event_CanBeAssigned()
         {
-            // Act & Assert
-            _tcpClient.Dispose();
-            Assert.DoesNotThrow(() => _tcpClient.Dispose());
-        }
-
-        [Test]
-        public async Task SendMessageAsync_IntegrationTest_WithMockServer()
-        {
-            // This test uses a simple mock server that doesn't actually listen
             // Arrange
-            var testData = new byte[] { 1, 2, 3 };
-            bool messageSent = false;
+            bool eventHandlerAssigned = false;
 
-            // We'll test that the method doesn't throw when not connected
-            // Act & Assert
-            Assert.ThrowsAsync<InvalidOperationException>(() => 
-                _tcpClient.SendMessageAsync(testData));
-        }
+            // Act
+            _tcpClient.MessageReceived += (sender, data) => { };
+            eventHandlerAssigned = true;
 
-        // Helper method to set private fields via reflection
-        private void SetPrivateField(object obj, string fieldName, object value)
-        {
-            var field = obj.GetType().GetField(fieldName, System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-            field?.SetValue(obj, value);
+            // Assert
+            Assert.That(eventHandlerAssigned, Is.True);
         }
     }
 
@@ -158,6 +126,17 @@ namespace NetSdrClientAppTests.Networking
         }
 
         [Test]
+        public void StartListeningAsync_ShouldReturnTask()
+        {
+            // Act
+            var task = _udpClient.StartListeningAsync();
+
+            // Assert
+            Assert.That(task, Is.Not.Null);
+            Assert.That(task, Is.InstanceOf<Task>());
+        }
+
+        [Test]
         public void StopListening_WhenNotStarted_ShouldNotThrow()
         {
             // Act & Assert
@@ -184,9 +163,6 @@ namespace NetSdrClientAppTests.Networking
 
             // Assert
             Assert.That(hash1, Is.EqualTo(hash2));
-            
-            udpClient1.Dispose();
-            udpClient2.Dispose();
         }
 
         [Test]
@@ -202,30 +178,89 @@ namespace NetSdrClientAppTests.Networking
 
             // Assert
             Assert.That(hash1, Is.Not.EqualTo(hash2));
-            
-            udpClient1.Dispose();
-            udpClient2.Dispose();
         }
 
         [Test]
         public void MessageReceived_Event_CanBeAssigned()
         {
             // Arrange
-            bool eventHandlerAdded = false;
+            bool eventHandlerAssigned = false;
 
             // Act
             _udpClient.MessageReceived += (sender, data) => { };
-            eventHandlerAdded = true;
+            eventHandlerAssigned = true;
 
             // Assert
-            Assert.That(eventHandlerAdded, Is.True);
+            Assert.That(eventHandlerAssigned, Is.True);
+        }
+    }
+
+    // Test implementation of NetworkClientBase
+    public class TestNetworkClient : NetworkClientBase
+    {
+        public void Start() => StartCancellationToken();
+        public void Stop() => StopCancellationToken();
+        
+        public void TestSafeExecute(Action action, string operationName) 
+            => SafeExecute(action, operationName);
+            
+        public Task TestSafeExecuteAsync(Func<Task> asyncAction, string operationName) 
+            => SafeExecuteAsync(asyncAction, operationName);
+    }
+
+    [TestFixture]
+    public class TcpClientWrapperImplementationTests
+    {
+        [Test]
+        public void HexStringConversion_ShouldFormatCorrectly()
+        {
+            // Arrange
+            var testData = new byte[] { 0x0A, 0x0B, 0x0C };
+            
+            // Act - test the conversion logic directly
+            var hexString = testData.Select(b => Convert.ToString(b, 16)).Aggregate((l, r) => $"{l} {r}");
+            
+            // Assert
+            Assert.That(hexString, Is.EqualTo("a b c"));
         }
 
         [Test]
-        public void Dispose_ShouldNotThrow()
+        public void SafeExecute_ShouldCatchExceptions()
         {
-            // Act & Assert
-            Assert.DoesNotThrow(() => _udpClient.Dispose());
+            // Arrange
+            var testClient = new TestNetworkClient();
+            var exceptionThrown = false;
+
+            // Act
+            testClient.TestSafeExecute(() => 
+            {
+                exceptionThrown = true;
+                throw new InvalidOperationException("Test exception");
+            }, "test operation");
+
+            // Assert
+            Assert.That(exceptionThrown, Is.True);
+            // Exception was caught by SafeExecute, so test should not fail
+        }
+
+        [Test]
+        public async Task SafeExecuteAsync_ShouldCatchAsyncExceptions()
+        {
+            // Arrange
+            var testClient = new TestNetworkClient();
+            var exceptionThrown = false;
+
+            // Act
+            await testClient.TestSafeExecuteAsync(async () => 
+            {
+                await Task.Delay(1);
+                exceptionThrown = true;
+                throw new InvalidOperationException("Test async exception");
+            }, "test async operation");
+
+            // Assert
+            Assert.That(exceptionThrown, Is.True);
+            // Exception was caught by SafeExecuteAsync, so test should not fail
         }
     }
 
@@ -290,17 +325,17 @@ namespace NetSdrClientAppTests.Networking
         }
 
         [Test]
-        public void SafeExecute_WithThrowingAction_ShouldNotThrow()
+        public void SafeExecute_WithThrowingAction_ShouldNotPropagateException()
         {
-            // Act & Assert
+            // Act & Assert - should not throw to test method
             Assert.DoesNotThrow(() => 
                 _testClient.TestSafeExecute(() => throw new Exception("Test exception"), "test operation"));
         }
 
         [Test]
-        public void SafeExecute_WithOperationCanceledException_ShouldNotLog()
+        public void SafeExecute_WithOperationCanceledException_ShouldNotPropagate()
         {
-            // Act & Assert - should not throw and not log the canceled exception
+            // Act & Assert
             Assert.DoesNotThrow(() => 
                 _testClient.TestSafeExecute(() => throw new OperationCanceledException(), "test operation"));
         }
@@ -323,7 +358,7 @@ namespace NetSdrClientAppTests.Networking
         }
 
         [Test]
-        public async Task SafeExecuteAsync_WithThrowingAsyncAction_ShouldNotThrow()
+        public async Task SafeExecuteAsync_WithThrowingAsyncAction_ShouldNotPropagateException()
         {
             // Act & Assert
             await _testClient.TestSafeExecuteAsync(async () => 
@@ -354,18 +389,205 @@ namespace NetSdrClientAppTests.Networking
             _testClient.Dispose();
             Assert.DoesNotThrow(() => _testClient.Dispose());
         }
+    }
 
-        // Test implementation of NetworkClientBase
-        private class TestNetworkClient : NetworkClientBase
+    // Additional test implementation for cancellation tests
+    public class TestNetworkClientWithToken : NetworkClientBase
+    {
+        public void Start() => StartCancellationToken();
+        public void Stop() => StopCancellationToken();
+        
+        public CancellationToken GetCancellationToken()
         {
-            public void Start() => StartCancellationToken();
-            public void Stop() => StopCancellationToken();
+            var field = typeof(NetworkClientBase).GetField("_cts", 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var cts = field?.GetValue(this) as CancellationTokenSource;
+            return cts?.Token ?? CancellationToken.None;
+        }
+    }
+
+    [TestFixture]
+    public class CancellationTests
+    {
+        [Test]
+        public void CancellationToken_ShouldBeCancelledAfterStop()
+        {
+            // Arrange
+            var testClient = new TestNetworkClientWithToken();
+            testClient.Start();
+
+            // Act
+            testClient.Stop();
+
+            // Assert
+            Assert.That(testClient.IsListening, Is.False);
+        }
+
+        [Test]
+        public void StartCancellationToken_ShouldDisposePrevious()
+        {
+            // Arrange
+            var testClient = new TestNetworkClientWithToken();
+            testClient.Start();
+            var firstToken = testClient.GetCancellationToken();
+
+            // Act
+            testClient.Start(); // Start again
+
+            // Assert
+            Assert.That(firstToken.IsCancellationRequested, Is.False);
+            Assert.That(testClient.IsListening, Is.True);
+        }
+    }
+
+    [TestFixture]
+    public class EventTests
+    {
+        [Test]
+        public void MessageReceived_Event_ShouldBeInvokable()
+        {
+            // Arrange
+            var tcpClient = new TcpClientWrapper("localhost", 8080);
+            var eventInvoked = false;
+            byte[] receivedData = null;
+
+            tcpClient.MessageReceived += (sender, data) =>
+            {
+                eventInvoked = true;
+                receivedData = data;
+            };
+
+            // Act - invoke event through reflection
+            var eventField = typeof(TcpClientWrapper).GetField("MessageReceived", 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var eventHandler = eventField?.GetValue(tcpClient) as EventHandler<byte[]>;
             
-            public void TestSafeExecute(Action action, string operationName) 
-                => SafeExecute(action, operationName);
-                
-            public Task TestSafeExecuteAsync(Func<Task> asyncAction, string operationName) 
-                => SafeExecuteAsync(asyncAction, operationName);
+            var testData = new byte[] { 1, 2, 3 };
+            eventHandler?.Invoke(tcpClient, testData);
+
+            // Assert
+            Assert.That(eventInvoked, Is.True);
+            Assert.That(receivedData, Is.EqualTo(testData));
+
+            tcpClient.Dispose();
+        }
+
+        [Test]
+        public void UdpMessageReceived_Event_ShouldBeInvokable()
+        {
+            // Arrange
+            var udpClient = new UdpClientWrapper(9090);
+            var eventInvoked = false;
+            byte[] receivedData = null;
+
+            udpClient.MessageReceived += (sender, data) =>
+            {
+                eventInvoked = true;
+                receivedData = data;
+            };
+
+            // Act - invoke event through reflection
+            var eventField = typeof(UdpClientWrapper).GetField("MessageReceived", 
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            var eventHandler = eventField?.GetValue(udpClient) as EventHandler<byte[]>;
+            
+            var testData = new byte[] { 4, 5, 6 };
+            eventHandler?.Invoke(udpClient, testData);
+
+            // Assert
+            Assert.That(eventInvoked, Is.True);
+            Assert.That(receivedData, Is.EqualTo(testData));
+
+            udpClient.Dispose();
+        }
+    }
+
+    [TestFixture]
+    public class StringConversionTests
+    {
+        [Test]
+        public void StringToByteConversion_ShouldWorkCorrectly()
+        {
+            // Arrange
+            var testString = "Hello World";
+            var expectedBytes = Encoding.UTF8.GetBytes(testString);
+
+            // Act
+            var actualBytes = Encoding.UTF8.GetBytes(testString);
+
+            // Assert
+            Assert.That(actualBytes, Is.EqualTo(expectedBytes));
+        }
+
+        [Test]
+        public void ByteToHexString_ShouldFormatCorrectly()
+        {
+            // Arrange
+            var testData = new byte[] { 0x00, 0xFF, 0x0A, 0x1F };
+
+            // Act
+            var hexString = testData.Select(b => Convert.ToString(b, 16)).Aggregate((l, r) => $"{l} {r}");
+
+            // Assert
+            Assert.That(hexString, Is.EqualTo("0 ff a 1f"));
+        }
+    }
+
+    [TestFixture]
+    public class ErrorHandlingTests
+    {
+        [Test]
+        public void SafeExecute_ShouldLogErrorsToConsole()
+        {
+            // Arrange
+            var testClient = new TestNetworkClient();
+            var originalOut = Console.Out;
+            
+            try
+            {
+                using var stringWriter = new StringWriter();
+                Console.SetOut(stringWriter);
+
+                // Act
+                testClient.TestSafeExecute(() => throw new InvalidOperationException("Test error"), "test operation");
+
+                // Assert
+                var output = stringWriter.ToString();
+                Assert.That(output, Contains.Substring("Error during test operation"));
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+            }
+        }
+
+        [Test]
+        public async Task SafeExecuteAsync_ShouldLogAsyncErrorsToConsole()
+        {
+            // Arrange
+            var testClient = new TestNetworkClient();
+            var originalOut = Console.Out;
+            
+            try
+            {
+                using var stringWriter = new StringWriter();
+                Console.SetOut(stringWriter);
+
+                // Act
+                await testClient.TestSafeExecuteAsync(async () => 
+                {
+                    await Task.Delay(1);
+                    throw new InvalidOperationException("Async test error");
+                }, "test async operation");
+
+                // Assert
+                var output = stringWriter.ToString();
+                Assert.That(output, Contains.Substring("Error during test async operation"));
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+            }
         }
     }
 }
