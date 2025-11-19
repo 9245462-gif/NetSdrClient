@@ -29,7 +29,6 @@ namespace NetSdrClientApp.Networking
         {
             if (Connected)
             {
-                Console.WriteLine($"Already connected to {_host}:{_port}");
                 return;
             }
 
@@ -41,8 +40,6 @@ namespace NetSdrClientApp.Networking
                 
                 StartCancellationToken();
                 _ = StartListeningAsync();
-                
-                Console.WriteLine($"Connected to {_host}:{_port}");
             }, "TCP connection");
         }
 
