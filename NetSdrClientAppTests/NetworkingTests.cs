@@ -208,6 +208,19 @@ namespace NetSdrClientAppTests.Networking
             => SafeExecuteAsync(asyncAction, operationName);
     }
 
+    // Extended test implementation for additional testing
+    public class ExtendedTestNetworkClient : NetworkClientBase
+    {
+        public void Start() => StartCancellationToken();
+        public void Stop() => StopCancellationToken();
+        
+        public void TestSafeExecute(Action action, string operationName) 
+            => SafeExecute(action, operationName);
+            
+        public Task TestSafeExecuteAsync(Func<Task> asyncAction, string operationName) 
+            => SafeExecuteAsync(asyncAction, operationName);
+    }
+
     [TestFixture]
     public class TcpClientWrapperImplementationTests
     {
@@ -588,6 +601,77 @@ namespace NetSdrClientAppTests.Networking
             {
                 Console.SetOut(originalOut);
             }
+        }
+    }
+
+    [TestFixture]
+    public class ExtendedNetworkClientBaseTests
+    {
+        private ExtendedTestNetworkClient _extendedTestClient;
+
+        [SetUp]
+        public void Setup()
+        {
+            _extendedTestClient = new ExtendedTestNetworkClient();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            _extendedTestClient.Dispose();
+        }
+
+        [Test]
+        public void ExtendedTestNetworkClient_Start_ShouldWork()
+        {
+            // Act
+            _extendedTestClient.Start();
+
+            // Assert
+            Assert.That(_extendedTestClient.IsListening, Is.True);
+        }
+
+        [Test]
+        public void ExtendedTestNetworkClient_Stop_ShouldWork()
+        {
+            // Arrange
+            _extendedTestClient.Start();
+
+            // Act
+            _extendedTestClient.Stop();
+
+            // Assert
+            Assert.That(_extendedTestClient.IsListening, Is.False);
+        }
+
+        [Test]
+        public void ExtendedTestNetworkClient_SafeExecute_ShouldWork()
+        {
+            // Arrange
+            bool executed = false;
+
+            // Act
+            _extendedTestClient.TestSafeExecute(() => executed = true, "extended test operation");
+
+            // Assert
+            Assert.That(executed, Is.True);
+        }
+
+        [Test]
+        public async Task ExtendedTestNetworkClient_SafeExecuteAsync_ShouldWork()
+        {
+            // Arrange
+            bool executed = false;
+
+            // Act
+            await _extendedTestClient.TestSafeExecuteAsync(async () => 
+            {
+                await Task.Delay(10);
+                executed = true;
+            }, "extended test async operation");
+
+            // Assert
+            Assert.That(executed, Is.True);
         }
     }
 }
