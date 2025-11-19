@@ -151,17 +151,23 @@ public class NetSdrClientTests
         _tcpMock.Setup(t => t.SendMessageAsync(It.IsAny<byte[]>()))
             .Callback(() =>
             {
-                // імітація приходу відповіді
                 _tcpMock.Raise(t => t.MessageReceived += null, _tcpMock.Object, expectedResponse);
             })
             .Returns(Task.CompletedTask);
 
-        // Act
-        var resp = await _client.ChangeFrequencyAsync(1000, 1);
+        // Act — виклик приватного методу через reflection
+        var response = await CallSendTcpRequest(_client, new byte[] { 1, 2, 3 });
 
         // Assert
-        Assert.NotNull(resp);
-        Assert.That(resp, Is.EqualTo(expectedResponse));
+        Assert.NotNull(response);
+        Assert.That(response, Is.EqualTo(expectedResponse));
+    }
+
+    private Task<byte[]> CallSendTcpRequest(NetSdrClient client, byte[] data)
+    {
+        var method = typeof(NetSdrClient)
+            .GetMethod("SendTcpRequest", BindingFlags.NonPublic | BindingFlags.Instance);
+        return (Task<byte[]>)method.Invoke(client, new object[] { data });
     }
 
     [Test]
