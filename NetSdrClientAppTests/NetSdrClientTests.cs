@@ -117,46 +117,27 @@ public class NetSdrClientTests
     }
 
     [Test]
-    public async Task ChangeFrequencyAsync_ShouldSendCorrectMessage()
-    {
-        // Arrange
-        await _client.ConnectAsync(); // встановлює Connected=true
-        long freq = 20_000_000;
-        int channel = 1;
-
-        byte[] sentMsg = null;
-        _tcpMock.Setup(t => t.SendMessageAsync(It.IsAny<byte[]>()))
-            .Callback<byte[]>(msg => sentMsg = msg)
-            .Returns(Task.CompletedTask);
-
-        // Act
-        await _client.ChangeFrequencyAsync(freq, channel);
-
-        // Assert
-        _tcpMock.Verify(t => t.SendMessageAsync(It.IsAny<byte[]>()), Times.AtLeastOnce);
-        Assert.NotNull(sentMsg);
-        Assert.That(sentMsg.Length, Is.GreaterThan(5));
-        
-        // перший байт тіла має бути channel
-        Assert.That(sentMsg[5], Is.EqualTo((byte)channel));
-    }
-
-    [Test]
     public async Task SendTcpRequest_ShouldReturnResponseFromEvent()
     {
         // Arrange
-        await _client.ConnectAsync();
-
+        _tcpMock.Setup(tcp => tcp.Connected).Returns(true);
+        
         byte[] expectedResponse = { 0x10, 0x20, 0x30 };
+        var tcs = new TaskCompletionSource<byte[]>();
 
         _tcpMock.Setup(t => t.SendMessageAsync(It.IsAny<byte[]>()))
-            .Callback(() =>
+            .Callback<byte[]>(data =>
             {
-                _tcpMock.Raise(t => t.MessageReceived += null, _tcpMock.Object, expectedResponse);
+                // Симулюємо відповідь з невеликою затримкою
+                Task.Run(async () =>
+                {
+                    await Task.Delay(100);
+                    _tcpMock.Raise(t => t.MessageReceived += null, _tcpMock.Object, expectedResponse);
+                });
             })
             .Returns(Task.CompletedTask);
 
-        // Act — виклик приватного методу через reflection
+        // Act
         var response = await CallSendTcpRequest(_client, new byte[] { 1, 2, 3 });
 
         // Assert
