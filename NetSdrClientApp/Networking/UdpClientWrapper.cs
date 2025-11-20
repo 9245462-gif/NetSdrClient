@@ -3,83 +3,83 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 
-public class UdpClientWrapper : IUdpClient
+namespace NetSdrClientApp.Networking
 {
-    private readonly IPEndPoint _localEndPoint;
-    private CancellationTokenSource? _cts;
-    private UdpClient? _udpClient;
-
-    public event EventHandler<byte[]>? MessageReceived;
-
-    public UdpClientWrapper(int port)
+    public class UdpClientWrapper : NetworkClientBase, IUdpClient
     {
-        _localEndPoint = new IPEndPoint(IPAddress.Any, port);
-    }
+        private readonly IPEndPoint _localEndPoint;
+        private UdpClient? _udpClient;
 
-    public async Task StartListeningAsync()
-    {
-        _cts = new CancellationTokenSource();
-        Console.WriteLine("Start listening for UDP messages...");
+        public event EventHandler<byte[]>? MessageReceived;
 
-        try
+        public UdpClientWrapper(int port)
         {
-            _udpClient = new UdpClient(_localEndPoint);
-            while (!_cts.Token.IsCancellationRequested)
+            _localEndPoint = new IPEndPoint(IPAddress.Any, port);
+        }
+
+        public async Task StartListeningAsync()
+        {
+            await SafeExecuteAsync(async () =>
             {
-                UdpReceiveResult result = await _udpClient.ReceiveAsync(_cts.Token);
-                MessageReceived?.Invoke(this, result.Buffer);
+                StartCancellationToken();
+                _udpClient = new UdpClient(_localEndPoint);
+                
+                Console.WriteLine("Start listening for UDP messages...");
 
-                Console.WriteLine($"Received from {result.RemoteEndPoint}");
-            }
+                while (!_cts!.Token.IsCancellationRequested)
+                {
+                    var result = await _udpClient.ReceiveAsync(_cts.Token);
+                    MessageReceived?.Invoke(this, result.Buffer);
+                    Console.WriteLine($"Received from {result.RemoteEndPoint}");
+                }
+            }, "UDP listening");
         }
-        catch (OperationCanceledException ex)
-        {
-            //empty
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error receiving message: {ex.Message}");
-        }
-    }
 
-    public void StopListening()
-    {
-        try
+        public void StopListening()
         {
-            _cts?.Cancel();
-            _udpClient?.Close();
-            Console.WriteLine("Stopped listening for UDP messages.");
+            SafeExecute(() =>
+            {
+                StopCancellationToken();
+                _udpClient?.Close();
+                Console.WriteLine("Stopped listening for UDP messages.");
+            }, "UDP stopping");
         }
-        catch (Exception ex)
+
+        public void Exit() => StopListening();
+
+        // Fixed: Proper GetHashCode + Equals pair
+        public override int GetHashCode()
         {
-            Console.WriteLine($"Error while stopping: {ex.Message}");
+            // Using a simple but sufficient hash combination
+            // No need for MD5 here — it's slow and unnecessary for equality
+            return HashCode.Combine(_localEndPoint.Address, _localEndPoint.Port);
         }
-    }
 
-    public void Exit()
-    {
-        try
+        public override bool Equals(object? obj)
         {
-            _cts?.Cancel();
-            _udpClient?.Close();
-            Console.WriteLine("Stopped listening for UDP messages.");
+            return obj is UdpClientWrapper other &&
+                   _localEndPoint.Port == other._localEndPoint.Port &&
+                   _localEndPoint.Address.Equals(other._localEndPoint.Address);
         }
-        catch (Exception ex)
+
+        // Optional but recommended: implement == and != operators
+        public static bool operator ==(UdpClientWrapper? left, UdpClientWrapper? right)
         {
-            Console.WriteLine($"Error while stopping: {ex.Message}");
+            if (left is null) return right is null;
+            return left.Equals(right);
         }
-    }
 
-    public override int GetHashCode()
-    {
-        var payload = $"{nameof(UdpClientWrapper)}|{_localEndPoint.Address}|{_localEndPoint.Port}";
+        public static bool operator !=(UdpClientWrapper? left, UdpClientWrapper? right)
+        {
+            return !(left == right);
+        }
 
-        using var md5 = MD5.Create();
-        var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(payload));
-
-        return BitConverter.ToInt32(hash, 0);
+        public override void Dispose()
+        {
+            base.Dispose();
+            _udpClient?.Dispose();
+        }
     }
 }
