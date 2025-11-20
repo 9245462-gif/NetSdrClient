@@ -4,8 +4,6 @@ using System.Linq;
 using System.Reflection.PortableExecutable;
 using System.Text;
 using System.Threading.Tasks;
-using NetSdrClientApp.Networking; // Навмисне порушення залежності
-
 
 namespace NetSdrClientApp.Messages
 {
@@ -17,13 +15,6 @@ namespace NetSdrClientApp.Messages
         private const short _msgHeaderLength = 2; //2 byte, 16 bit
         private const short _msgControlItemLength = 2; //2 byte, 16 bit
         private const short _msgSequenceNumberLength = 2; //2 byte, 16 bit
-
-        // Додайте будь-яке посилання на Networking для порушення
-        private static void SomeMethod()
-        {
-            // Це порушить тест Messages_Should_Not_Depend_On_Networking 
-            var dummy = typeof(ITcpClient).Name;
-        }
         
         public enum MsgTypes
         {
