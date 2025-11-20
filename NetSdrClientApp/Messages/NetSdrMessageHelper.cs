@@ -21,7 +21,7 @@ namespace NetSdrClientApp.Messages
         // Додайте будь-яке посилання на Networking для порушення
         private static void SomeMethod()
         {
-            // Це порушить тест Messages_Should_Not_Depend_On_Networking
+            // Це порушить тест Messages_Should_Not_Depend_On_Networking 
             var dummy = typeof(ITcpClient).Name;
         }
         
