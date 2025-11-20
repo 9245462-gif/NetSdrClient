@@ -49,13 +49,31 @@ namespace NetSdrClientApp.Networking
 
         public void Exit() => StopListening();
 
+        // Fixed: Proper GetHashCode + Equals pair
         public override int GetHashCode()
         {
-            var payload = $"{nameof(UdpClientWrapper)}|{_localEndPoint.Address}|{_localEndPoint.Port}";
+            // Using a simple but sufficient hash combination
+            // No need for MD5 here — it's slow and unnecessary for equality
+            return HashCode.Combine(_localEndPoint.Address, _localEndPoint.Port);
+        }
 
-            using var md5 = MD5.Create();
-            var hash = md5.ComputeHash(Encoding.UTF8.GetBytes(payload));
-            return BitConverter.ToInt32(hash, 0);
+        public override bool Equals(object? obj)
+        {
+            return obj is UdpClientWrapper other &&
+                   _localEndPoint.Port == other._localEndPoint.Port &&
+                   _localEndPoint.Address.Equals(other._localEndPoint.Address);
+        }
+
+        // Optional but recommended: implement == and != operators
+        public static bool operator ==(UdpClientWrapper? left, UdpClientWrapper? right)
+        {
+            if (left is null) return right is null;
+            return left.Equals(right);
+        }
+
+        public static bool operator !=(UdpClientWrapper? left, UdpClientWrapper? right)
+        {
+            return !(left == right);
         }
 
         public override void Dispose()
