@@ -15,11 +15,11 @@ namespace NetSdrClientApp
     public class NetSdrClient
     {
         private readonly ITcpClient _tcpClient;
-        private readonly IUdpClient _udpClient;
+        private readonly NetworkCommunication.IUdpClient _udpClient;
 
         public bool IQStarted { get; set; }
 
-        public NetSdrClient(ITcpClient tcpClient, IUdpClient udpClient)
+        public NetSdrClient(ITcpClient tcpClient, NetworkCommunication.IUdpClient udpClient)
         {
             _tcpClient = tcpClient;
             _udpClient = udpClient;

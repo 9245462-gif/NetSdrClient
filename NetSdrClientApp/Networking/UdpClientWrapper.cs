@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace NetSdrClientApp.Networking
 {
-    public class UdpClientWrapper : NetworkClientBase, IUdpClient
+    public class UdpClientWrapper : NetworkClientBase, NetworkCommunication.IUdpClient
     {
         private readonly IPEndPoint _localEndPoint;
         private UdpClient? _udpClient;

@@ -12,12 +12,10 @@ namespace NetSdrClientAppTests
         [Test]
         public void GetControlItemMessageTest()
         {
-            //Arrange
             var type = NetSdrMessageHelper.MsgTypes.Ack;
             var code = NetSdrMessageHelper.ControlItemCodes.ReceiverState;
             int parametersLength = 7500;
 
-            //Act
             byte[] msg = NetSdrMessageHelper.GetControlItemMessage(type, code, new byte[parametersLength]);
 
             var headerBytes = msg.Take(2);
