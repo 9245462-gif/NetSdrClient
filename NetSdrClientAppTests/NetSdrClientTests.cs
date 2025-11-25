@@ -9,7 +9,7 @@ public class NetSdrClientTests
 {
     NetSdrClient _client;
     Mock<ITcpClient> _tcpMock;
-    Mock<IUdpClient> _updMock;
+    Mock<NetworkCommunication.IUdpClient> _updMock;
 
     public NetSdrClientTests() { }
 
@@ -32,7 +32,7 @@ public class NetSdrClientTests
             _tcpMock.Raise(tcp => tcp.MessageReceived += null, _tcpMock.Object, bytes);
         });
 
-        _updMock = new Mock<IUdpClient>();
+        _updMock = new Mock<NetworkCommunication.IUdpClient>();
 
         _client = new NetSdrClient(_tcpMock.Object, _updMock.Object);
     }

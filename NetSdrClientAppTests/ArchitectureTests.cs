@@ -75,7 +75,7 @@ namespace NetSdrClientAppTests
             // UdpClientWrapper повинен реалізовувати IUdpClient
             var udpResult = Types.InCurrentDomain()
                 .That().HaveName("UdpClientWrapper")
-                .Should().ImplementInterface(typeof(IUdpClient))
+                .Should().ImplementInterface(typeof(NetworkCommunication.IUdpClient))
                 .GetResult();
 
             // NetworkClientBase може бути абстрактним і не реалізовувати інтерфейси напряму
